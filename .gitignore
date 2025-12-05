@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+
+# Output directories
+docker_volumes/
+outputs/
+
+# IDE specific files
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Cloudinary uploads
+*.tmp
+
+# Temporary files
+*.swp
+*~
