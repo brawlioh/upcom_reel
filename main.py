@@ -7,15 +7,11 @@ from pathlib import Path
 from loguru import logger
 from config import Config
 from typing import Dict, List, Optional
-# Use Railway-compatible scraper for deployment
 import os
-if os.environ.get('RAILWAY_ENVIRONMENT'):
-    from utils.steam_scraper_railway import SteamScraper
-else:
-    from utils.steam_scraper import SteamScraper
+from utils.steam_scraper import SteamScraper
 from modules.module1_intro import IntroGenerator
 from modules.module2_vizard import VizardProcessor
-from modules.module0_price import PriceComparisonGenerator  # Updated to use PriceComparisonGenerator instead of ImageGenerator
+from modules.module0_price import PriceComparisonGenerator
 from modules.module4_compilation import CreatorMateCompiler
 from datetime import datetime
 
@@ -25,14 +21,12 @@ class YouTubeReelsAutomation:
         self.steam_scraper = SteamScraper()
         self.intro_generator = IntroGenerator()
         self.vizard_processor = VizardProcessor()
-        self.image_generator = PriceComparisonGenerator()  # Updated to use PriceComparisonGenerator
+        self.image_generator = PriceComparisonGenerator()
         self.compiler = CreatorMateCompiler()
-        
-        # Webhook functionality removed
         
         # Progress tracking
         self.current_step = 0
-        self.total_steps = 4  # Restored to 4 steps including price comparison banner
+        self.total_steps = 4
         self.start_time = None
         
         # Setup logging
@@ -119,8 +113,6 @@ class YouTubeReelsAutomation:
         print(f"📊 Current: {step_name} - Elapsed: {elapsed_str}")
         logger.info(f"Progress: {progress:.1f}% - {step_name}")
     
-    # Webhook functionality removed to eliminate 410 errors
-    
     async def create_reel_for_game(self, game_data: Dict) -> Optional[str]:
         """Create complete reel for a single game with progress tracking"""
         game_title = game_data['title']
@@ -145,31 +137,15 @@ class YouTubeReelsAutomation:
                 price_gen = PriceComparisonGenerator()
                 original_url = game_data.get('allkeyshop_url')
                 
-                # DIRECT FIX: Special handling for Europa Universalis IV
-                if "europa universalis iv" in game_title.lower() and "europa-universalis-v" in original_url.lower():
-                    corrected_url = original_url.replace("europa-universalis-v", "europa-universalis-iv")
+                # Use the generic correction method
+                corrected_url = price_gen._correct_url_if_needed(original_url, game_title)
+                # If URL was corrected, update it
+                if corrected_url != original_url:
                     game_data['allkeyshop_url'] = corrected_url
-                    print(f"\n⚠️ CRITICAL FIX: Changed URL from Europa Universalis V to IV: {corrected_url}")
-                    logger.info(f"Corrected Europa Universalis URL: {corrected_url}")
+                    print(f"\n🔧 URL corrected for better matching: {corrected_url}")
+                    logger.info(f"Corrected AllKeyShop URL: {corrected_url}")
                 else:
-                    # Use the generic correction method
-                    corrected_url = price_gen._correct_url_if_needed(original_url, game_title)
-                    # If URL was corrected, update it
-                    if corrected_url != original_url:
-                        game_data['allkeyshop_url'] = corrected_url
-                        print(f"\n🔧 URL corrected for better matching: {corrected_url}")
-                        logger.info(f"Corrected AllKeyShop URL: {corrected_url}")
-                    else:
-                        print(f"\n🔗 Using provided AllKeyShop URL: {original_url}")
-                
-                # Final safety check for Europa Universalis IV
-                if "europa universalis iv" in game_title.lower():
-                    current_url = game_data.get('allkeyshop_url', '')
-                    if 'europa-universalis-v' in current_url.lower():
-                        fixed_url = current_url.replace('europa-universalis-v', 'europa-universalis-iv')
-                        game_data['allkeyshop_url'] = fixed_url
-                        print(f"\n🚨 FINAL CHECK: Corrected Europa Universalis URL: {fixed_url}")
-                        logger.info(f"Final URL correction for Europa Universalis IV: {fixed_url}")
+                    print(f"\n🔗 Using provided AllKeyShop URL: {original_url}")
             
             # Module 1: Create Intro
             self.update_progress(1, "Creating intro video with HeyGen")
@@ -510,13 +486,10 @@ async def run_individual_module(automation, module_num: int, input_value: str, a
     try:
         if module_num == 1:
             print("📹 MODULE 1: INTRO GENERATION")
-            print(f"🔧 Downloading HeyGen video and uploading to Cloudinary")
-
+            print(f"🔧 Generating intro with HeyGen")
             
-            # Use the specific video ID from your HeyGen dashboard
-            video_id = "ed0cd544c65d49bf88a0a1659f53fc55"  # From your dashboard screenshot
-            
-            result = await automation.intro_generator.download_heygen_and_upload_cloudinary(video_id, game_data['title'])
+            # Generate intro normally through the pipeline
+            result = await automation.intro_generator.create_intro(game_data['title'], game_data)
             print(f"✅ Intro Cloudinary URL: {result}")
             
         elif module_num == 2:
