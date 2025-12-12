@@ -213,7 +213,7 @@ class IntroGenerator:
             
             # Payload format based on the working reference example
             payload = {
-                "caption": True,  # Enable captions for the video
+                "caption": True,  # Enable captions for the video (required for burned-in captions)
                 "dimension": {
                     "width": 720,
                     "height": 1280
@@ -251,6 +251,7 @@ class IntroGenerator:
             logger.info(f"Using endpoint: {url}")
             logger.info(f"Payload structure matches working reference example")
             logger.info(f"Setting caption: True to enable standard captions")
+            logger.info(f"Will download video with burned-in captions using ?captioned=true parameter")
             
             # Create SSL context that doesn't verify certificates
             ssl_context = ssl.create_default_context()
@@ -289,13 +290,20 @@ class IntroGenerator:
                             
                             if video_url and video_url.startswith('http'):
                                 logger.info(f"Got video URL: {video_url}")
-                                # Download and upload to Cloudinary
-                                cloudinary_url = await self._download_video(session, video_url, game_title, "intro")
-                                if cloudinary_url:
-                                    logger.info(f"✅ HeyGen video processed and uploaded to Cloudinary: {cloudinary_url}")
-                                    return cloudinary_url
-                                else:
-                                    raise Exception("Failed to download and upload video to Cloudinary")
+                                try:
+                                    # Attempt automatic download
+                                    cloudinary_url = await self._download_video(session, video_url, game_title, "intro")
+                                    if cloudinary_url:
+                                        logger.info(f"✅ HeyGen video processed and uploaded to Cloudinary: {cloudinary_url}")
+                                        return cloudinary_url
+                                    else:
+                                        # Fall back to manual method if download didn't return a URL
+                                        logger.warning("Automatic download failed, switching to manual mode")
+                                        return await self._prompt_manual_download(video_url, task_id, game_title)
+                                except Exception as download_error:
+                                    # If any exception occurs during download, switch to manual mode
+                                    logger.warning(f"Download error: {download_error}, switching to manual mode")
+                                    return await self._prompt_manual_download(video_url, task_id, game_title)
                             else:
                                 raise Exception("Failed to get valid video URL from polling")
                         else:
@@ -414,25 +422,82 @@ class IntroGenerator:
                             
                             # If video is complete, extract URL with a simplified approach
                             if is_completed:
-                                # First check common URL locations
-                                video_url = data.get('video_url') or data.get('url')
+                                # Prefer captioned URL if available (matches Make/HeyGen screenshot "video_url_caption")
+                                video_url = (
+                                    data.get('video_url_caption')
+                                    or data.get('video_url')
+                                    or data.get('url')
+                                )
                                 
                                 # If not found at top level, check nested structures
                                 if not video_url:
                                     # Check in nested data
                                     nested_data = data.get('data', {})
                                     if isinstance(nested_data, dict):
-                                        video_url = nested_data.get('video_url') or nested_data.get('url')
+                                        video_url = (
+                                            nested_data.get('video_url_caption')
+                                            or nested_data.get('video_url')
+                                            or nested_data.get('url')
+                                        )
                                     
                                     # Check in result
                                     if not video_url:
                                         result_data = data.get('result', {})
                                         if isinstance(result_data, dict):
-                                            video_url = result_data.get('video_url') or result_data.get('url')
+                                            video_url = (
+                                                result_data.get('video_url_caption')
+                                                or result_data.get('video_url')
+                                                or result_data.get('url')
+                                            )
                                 
                                 # Return URL if valid
                                 if video_url and isinstance(video_url, str) and video_url.startswith('http'):
                                     logger.info(f"✅ Found HeyGen video URL: {video_url}")
+                                    
+                                    # Extract video ID from URL for direct API download
+                                    try:
+                                        # Try to extract video ID from URL path
+                                        from urllib.parse import urlparse
+                                        path_parts = urlparse(video_url).path.split('/')
+                                        video_id = None
+                                        for part in path_parts:
+                                            if part and len(part) > 20:  # Video IDs are typically long strings
+                                                video_id = part
+                                                break
+                                        
+                                        # Use video ID for captioned download
+                                        if video_id:
+                                            logger.info(f"🔤 Found video ID for captioned download: {video_id}")
+                                            
+                                            # Rather than returning a dict, call the download API directly here
+                                            download_api_url = "https://api.heygen.com/v1/video.download"
+                                            download_headers = {
+                                                "accept": "application/json",
+                                                "content-type": "application/json",
+                                                "x-api-key": Config.HEYGEN_API_KEY
+                                            }
+                                            download_payload = {
+                                                "video_id": video_id,
+                                                "captioned": True
+                                            }
+                                            
+                                            logger.info(f"Requesting captioned video download URL from HeyGen API")
+                                            async with session.post(download_api_url, json=download_payload, headers=download_headers) as download_response:
+                                                if download_response.status == 200:
+                                                    download_result = await download_response.json()
+                                                    download_url = download_result.get('data', {}).get('url')
+                                                    if download_url:
+                                                        logger.info(f"✅ Successfully obtained URL for video WITH captions: {download_url}")
+                                                        return download_url
+                                                    else:
+                                                        logger.warning(f"HeyGen download API didn't return a URL: {download_result}")
+                                                else:
+                                                    error_text = await download_response.text()
+                                                    logger.warning(f"HeyGen download API error: {download_response.status} - {error_text}")
+                                    except Exception as e:
+                                        logger.warning(f"Error extracting video ID or using download API: {e}")
+                                    
+                                    # Just return the direct URL as a fallback
                                     return video_url
                                 else:
                                     logger.warning("Video marked as complete but URL not found in response")
@@ -497,7 +562,10 @@ class IntroGenerator:
         return dashboard_url
 
     async def _download_video(self, session: aiohttp.ClientSession, video_url: str, game_title: str, module_type: str) -> Optional[str]:
-        """Download video from URL, save locally, and upload to Cloudinary with improved error handling"""
+        """Download video from URL, save locally, and upload to Cloudinary with improved error handling
+        
+        Note: If the URL is from the HeyGen download API, it may already include captions burned into the video.
+        """
         try:
             # Clean filename for safe storage
             safe_title = "".join(c for c in game_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -508,59 +576,163 @@ class IntroGenerator:
             save_dir.mkdir(parents=True, exist_ok=True)
             file_path = save_dir / filename
             
-            # If this is a HeyGen dashboard URL, we can't download directly
+            # Check if this is a HeyGen dashboard URL
             if "app.heygen.com/videos" in video_url:
                 logger.error(f"Cannot download directly from HeyGen dashboard: {video_url}")
                 logger.error(f"Please download the video from the dashboard URL manually")
                 # Fail clearly instead of using a fallback
                 raise Exception(f"HeyGen dashboard URLs cannot be downloaded automatically: {video_url}")
             
-            logger.info(f"Attempting to download video from: {video_url}")
+            # Check if this appears to be a captioned video from various indicators
+            captioned = False
+            if "download" in video_url and "captioned=true" in video_url.lower():
+                captioned = True
+            elif "v1/video.download" in video_url:
+                captioned = True
+            elif "captioned" in video_url.lower():
+                captioned = True
             
-            # Download the file directly using a streaming approach
-            # This approach prevents memory issues with large files
+            # Log the URL we'll be using for download
+            if captioned:
+                logger.info(f"🔤 Downloading video WITH BURNED-IN CAPTIONS from: {video_url}")
+            else:
+                logger.info(f"Attempting to download video from: {video_url} (no captions confirmed)")
+                # Attempt to add captioned parameter if not already present
+                if "?" not in video_url and "captioned" not in video_url.lower():
+                    video_url = f"{video_url}?captioned=true"
+                    logger.info(f"Added captioned parameter to URL: {video_url}")
+            
+            # Import requests for fallback
+            import requests
+            import os
+            
+            # Extract video ID if available
+            video_id = None
             try:
-                # Special headers for HeyGen files
-                if "heygen.ai" in video_url:
-                    # HeyGen requires specific headers
+                if "/videos/" in video_url:
+                    video_id = video_url.split("/videos/")[1].split("/")[0].split("?")[0]
+                elif "video_id=" in video_url:
+                    video_id = video_url.split("video_id=")[1].split("&")[0]
+                
+                if video_id:
+                    logger.info(f"Extracted video ID: {video_id}")
+            except Exception as e:
+                logger.warning(f"Could not extract video ID: {e}")
+            
+            # Direct API download approach - most reliable method
+            if video_id:
+                try:
+                    download_api_url = "https://api.heygen.com/v1/video.download"
+                    download_headers = {
+                        "accept": "application/json",
+                        "content-type": "application/json",
+                        "x-api-key": Config.HEYGEN_API_KEY
+                    }
+                    download_payload = {
+                        "video_id": video_id,
+                        "captioned": True
+                    }
+                    
+                    logger.info(f"Using direct download API with auth: {download_api_url}")
+                    
+                    # Use requests for this call - more reliable than aiohttp for this endpoint
+                    response = requests.post(download_api_url, json=download_payload, headers=download_headers)
+                    if response.status_code == 200:
+                        result = response.json()
+                        direct_url = result.get('data', {}).get('url')
+                        if direct_url and isinstance(direct_url, str) and direct_url.startswith('http'):
+                            logger.info(f"Got authorized direct download URL: {direct_url}")
+                            
+                            # Now download from the authorized direct URL with streaming
+                            stream_headers = {
+                                "accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
+                                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+                                "referer": "https://app.heygen.com/"
+                            }
+                            
+                            with requests.get(direct_url, headers=stream_headers, stream=True) as r:
+                                r.raise_for_status()
+                                with open(file_path, 'wb') as f:
+                                    for chunk in r.iter_content(chunk_size=8192):
+                                        if chunk:
+                                            f.write(chunk)
+                            
+                            logger.info(f"✅ Successfully downloaded video via API to {file_path}")
+                            # Skip the aiohttp attempt since we already succeeded
+                            cloudinary_url = await self._upload_to_cloudinary_public(str(file_path), f"{safe_title}_{module_type}")
+                            return cloudinary_url
+                except Exception as api_e:
+                    logger.warning(f"API download method failed: {api_e}, trying fallback methods")
+            
+            # Fallback approach - Try requests library with special headers
+            try:
+                # Special headers with auth for files2.heygen.ai domain
+                if "files2.heygen.ai" in video_url or "heygen.ai" in video_url:
+                    # Full comprehensive headers with authentication
                     headers = {
-                        "accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
-                        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+                        "accept": "video/mp4,video/*;q=0.9,*/*;q=0.8,*/*",
+                        "accept-language": "en-US,en;q=0.9",
+                        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
                         "referer": "https://app.heygen.com/",
                         "origin": "https://app.heygen.com",
-                        "Connection": "keep-alive"
+                        "sec-fetch-dest": "video",
+                        "sec-fetch-mode": "no-cors",
+                        "sec-fetch-site": "same-site",
+                        "Connection": "keep-alive",
+                        "Authorization": f"Bearer {Config.HEYGEN_API_KEY}",  # Critical auth header
+                        "x-api-key": Config.HEYGEN_API_KEY  # Secondary auth header
                     }
-                    logger.info("Using HeyGen-specific download headers")
-                else:
-                    headers = {
-                        "accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
-                        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15"
-                    }
+                    logger.info(f"Using requests library with enhanced auth headers: {video_url}")
+                    
+                    try:
+                        with requests.get(video_url, headers=headers, stream=True, timeout=60) as r:
+                            r.raise_for_status()  # This will raise an exception for 4XX/5XX errors
+                            with open(file_path, 'wb') as f:
+                                for chunk in r.iter_content(chunk_size=8192):
+                                    if chunk:
+                                        f.write(chunk)
+                        
+                        logger.info(f"✅ Successfully downloaded using requests library: {file_path}")
+                        cloudinary_url = await self._upload_to_cloudinary_public(str(file_path), f"{safe_title}_{module_type}")
+                        return cloudinary_url
+                    
+                    except Exception as req_e:
+                        logger.warning(f"Requests download failed: {req_e}, trying aiohttp")
+            except Exception as outer_e:
+                logger.warning(f"Outer requests attempt failed: {outer_e}, trying aiohttp")
+            
+            # Last attempt with aiohttp (least reliable for HeyGen)
+            try:
+                # Special headers for HeyGen files
+                headers = {
+                    "accept": "video/mp4,video/*;q=0.9,*/*;q=0.8",
+                    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+                    "referer": "https://app.heygen.com/",
+                    "origin": "https://app.heygen.com",
+                    "Connection": "keep-alive",
+                    "Authorization": f"Bearer {Config.HEYGEN_API_KEY}", 
+                    "x-api-key": Config.HEYGEN_API_KEY
+                }
                 
-                # First attempt with aiohttp
-                logger.info(f"Downloading using aiohttp: {video_url}")
+                logger.info(f"Final attempt with aiohttp: {video_url}")
                 timeout = aiohttp.ClientTimeout(total=300)  # 5 minutes timeout
                 
                 # Use context manager to ensure the file is properly closed
                 with open(file_path, 'wb') as f:
                     async with session.get(video_url, headers=headers, timeout=timeout) as response:
                         if response.status == 200:
-                            # Stream the content to disk in chunks to avoid memory issues
-                            content_length = int(response.headers.get('content-length', '0'))
-                            logger.info(f"Content length: {content_length} bytes")
-                            
-                            # Stream the download in chunks
+                            # Stream the content to file in chunks to handle large files
                             chunk_size = 1024 * 1024  # 1MB chunks
                             downloaded = 0
+                            content_length = int(response.headers.get('Content-Length', '0'))
                             
                             async for chunk in response.content.iter_chunked(chunk_size):
-                                if chunk:
-                                    f.write(chunk)
-                                    downloaded += len(chunk)
-                                    if content_length > 0:
-                                        percent = int((downloaded / content_length) * 100)
-                                        if downloaded % (10 * chunk_size) == 0:  # Log every 10MB
-                                            logger.info(f"Download progress: {percent}% ({downloaded}/{content_length} bytes)")
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if content_length > 0:
+                                    percent = int((downloaded / content_length) * 100)
+                                    if downloaded % (10 * chunk_size) == 0:  # Log every 10MB
+                                        logger.info(f"Download progress: {percent}% ({downloaded}/{content_length} bytes)")
                             
                             logger.info(f"✅ Successfully downloaded video to {file_path}")
                         else:
@@ -710,6 +882,57 @@ class IntroGenerator:
             logger.error(f"Error uploading to Cloudinary: {e}")
             raise Exception(f"Cloudinary upload failed: {e}")
 
+    async def _prompt_manual_download(self, video_url: str, task_id: str, game_title: str) -> str:
+        """Handle manual download process by prompting the user
+        
+        Args:
+            video_url: Original video URL (may be a dashboard URL)
+            task_id: HeyGen task ID
+            game_title: Title of the game
+            
+        Returns:
+            str: Cloudinary URL provided by the user
+        """
+        # Generate the dashboard URL where the user can view and download the video
+        dashboard_url = f"https://app.heygen.com/videos/{task_id}"
+        
+        # Print instructions with clear formatting to make them stand out
+        print("\n" + "=" * 80)
+        print("⚠️  MANUAL ACTION REQUIRED: HeyGen Video Download  ⚠️")
+        print("=" * 80)
+        print(f"\n1. Please open this URL in your browser: {dashboard_url}")
+        print("   If this URL doesn't work, go to https://app.heygen.com/ and log in")
+        print("\n2. Once the video is ready, click on the download button (bottom right)")
+        print("\n3. Select 'Download Captioned Video' option to get the video with captions")
+        print("\n4. Upload the downloaded video to Cloudinary manually:")
+        print("   a. Go to https://cloudinary.com/ and log in")
+        print("   b. Click on 'Media Library' > 'Upload' button")
+        print("   c. Select the downloaded video file")
+        print("   d. Wait for upload to complete")
+        print("   e. Click on the uploaded video")
+        print("   f. Copy the 'Video URL' (not the secure URL)")
+        print("\n5. Paste the Cloudinary URL below and press Enter")
+        print("   Example URL format: http://res.cloudinary.com/your-cloud-name/video/upload/...")
+        print("\n" + "-" * 80)
+        
+        # Log the instructions as well
+        logger.info(f"Manual download URL: {dashboard_url}")
+        logger.info("Waiting for user to manually download, upload to Cloudinary, and provide the URL")
+        
+        # Prompt user for input
+        cloudinary_url = input("\nPlease paste the Cloudinary URL here: ")
+        
+        # Validate the input URL
+        while not cloudinary_url.startswith("http") or "cloudinary.com" not in cloudinary_url:
+            print("\n❌ Invalid URL! Please provide a valid Cloudinary URL.")
+            cloudinary_url = input("\nPlease paste the Cloudinary URL here: ")
+        
+        logger.info(f"User provided manual Cloudinary URL: {cloudinary_url}")
+        print("\n✅ URL accepted! Continuing with the pipeline...")
+        print("-" * 80 + "\n")
+        
+        return cloudinary_url
+    
     async def create_intro(self, game_title: str, game_details: Dict = None) -> Optional[str]:
         """Main method to create intro video"""
         try:
@@ -727,11 +950,22 @@ class IntroGenerator:
             # Generate script without price comparison information
             script = await self.generate_intro_script(game_title, game_details)
             
-            # Generate video with HeyGen
-            video_path = await self.generate_heygen_video(script, game_title)
-            
-            logger.info(f"Intro created successfully: {video_path}")
-            return video_path
+            try:
+                # Generate video with HeyGen
+                video_path = await self.generate_heygen_video(script, game_title)
+                
+                logger.info(f"Intro created successfully: {video_path}")
+                return video_path
+            except Exception as heygen_error:
+                logger.warning(f"HeyGen automatic video generation failed: {heygen_error}")
+                logger.warning("Falling back to manual download prompt")
+                
+                # Generate a random task_id for manual download in case we don't have one
+                import uuid
+                task_id = str(uuid.uuid4()).replace('-', '')
+                
+                # Direct user to manual download process
+                return await self._prompt_manual_download("https://app.heygen.com/", task_id, game_title)
                 
         except Exception as e:
             logger.error(f"Error creating intro: {e}")

@@ -229,16 +229,8 @@ class VizardProcessor:
                 'action_gameplay': 73952796,  # Using requested template
                 'strategy_gameplay': 73952796,  # Using requested template
                 'general': 73952796,  # Using requested template
-                'safe_crop': 73952796,  # Using requested template
-                'sonic': 73952796  # Special template for Sonic games
+                'safe_crop': 73952796  # Using requested template
             }
-            
-            # Check if this is a Sonic game and log special handling
-            game_title_lower = game_title.lower()
-            if 'sonic' in game_title_lower:
-                logger.info(f"🔵 Special handling for Sonic game: {game_title} - using fullscreen template")
-                # Force the strongest fullscreen settings for Sonic
-                return templates['sonic']
             
             # Log the template selection
             logger.info(f"🎮 Using requested template ID 73952796 for {game_title}")
@@ -280,6 +272,8 @@ class VizardProcessor:
                 "maxDuration": 90,  # Maximum 90 seconds
                 "optimalDuration": 75,  # Target 75-second clips
                 "showCaptions": False,  # Do not show captions
+                "subtitleSwitch": 0,  # Disable subtitles in output
+                "headlineSwitch": 0,  # Disable headline overlays in output
                 "fillScreen": True,  # Ensure video fills the entire screen
                 "smartCrop": True,  # Use smart crop to focus on important content
                 "scaleMode": "fit",  # Maintain aspect ratio while maximizing screen usage
@@ -596,23 +590,6 @@ class VizardProcessor:
         max_retries = 2
         retry_count = 0
         
-        # Special handling for Sonic games to ensure full screen coverage
-        is_sonic_game = 'sonic' in game_title.lower()
-        if is_sonic_game:
-            logger.info(f"🔵 SPECIAL HANDLING: {game_title} detected as Sonic game - using optimized full-screen settings")
-            # For Sonic games, try our specific sources first
-            try:
-                # Find best Sonic video source first
-                video_url = await self.search_youtube_gameplay(game_title)
-                if video_url:
-                    logger.info(f"✅ Using special Sonic gameplay source: {video_url}")
-                    processed_path = await self.submit_to_vizard(video_url, game_title)
-                    logger.info(f"✅ Sonic gameplay clip processed successfully: {processed_path}")
-                    return processed_path
-            except Exception as e:
-                logger.warning(f"⚠️ Special Sonic handling failed: {e}, falling back to standard process")
-                # Continue with standard processing if special handling fails
-        
         while retry_count < max_retries:
             try:
                 logger.info(f"Processing gameplay clip for {game_title} (attempt {retry_count + 1}/{max_retries})")
@@ -667,34 +644,7 @@ class VizardProcessor:
                 f"{game_title} in-game footage"
             ]
             
-            # Updated backup video database with text-free gameplay footage URLs
-            backup_videos = {
-                # Raw gameplay videos without commentary or text overlays
-                "cyberpunk": "https://www.youtube.com/watch?v=hvoD7ehZPcM", # Pure gameplay
-                "elden ring": "https://www.youtube.com/watch?v=WqFMwJtjMcY", # No commentary gameplay
-                "starfield": "https://www.youtube.com/watch?v=F_zAoby0UYk", # No HUD gameplay
-                "baldur": "https://www.youtube.com/watch?v=JD9TXK632-s", # Pure gameplay
-                "witcher": "https://www.youtube.com/watch?v=uFLCrscZgmw", # No commentary
-                "hades": "https://www.youtube.com/watch?v=VKepf4jln4M", # Pure gameplay
-                "minecraft": "https://www.youtube.com/watch?v=LxcY1Dq-TDw", # No commentary
-                "fortnite": "https://www.youtube.com/watch?v=QhQZ6QXD-yw", # Raw gameplay
-                "diablo": "https://www.youtube.com/watch?v=LOD5L4-YVCs", # Pure gameplay
-                "call of duty": "https://www.youtube.com/watch?v=UjRrGZCM48k", # No commentary
-                # Special fullscreen-optimized sources for Sonic games
-                "sonic": "https://www.youtube.com/watch?v=RXlJT5j6g-w", # Sonic Frontiers no commentary
-                "sonic rumble": "https://www.youtube.com/watch?v=pvsYsXwmgVQ", # Sonic gameplay that fills screen better
-                "sonic frontiers": "https://www.youtube.com/watch?v=Pn5jMkAZWdo", # No commentary footage
-                "sonic superstars": "https://www.youtube.com/watch?v=wh3S5luujAw" # High quality full screen footage
-            }
-            
-            # Check for partial matches in backup videos
-            game_lower = game_title.lower()
-            for key, url in backup_videos.items():
-                if key in game_lower or any(word in game_lower for word in key.split()):
-                    logger.info(f"✅ Found backup video for {game_title}: {url}")
-                    return url
-            
-            # PRODUCTION: No fallback URLs - require real gameplay footage
+            # PRODUCTION: No hard-coded fallback URLs - require real gameplay footage
             logger.error(f"❌ No gameplay videos found for {game_title} in production")
             raise Exception(f"No gameplay videos found for {game_title}. Please provide custom_video_url or ensure Steam game has available footage.")
             
@@ -748,6 +698,8 @@ class VizardProcessor:
                 "scaleMode": "fit",  # Maintain aspect ratio while maximizing screen usage
                 "fillFramesVertically": True,  # Force vertical fill mode
                 "aspectRatio": "9:16",  # Fixed vertical aspect ratio for mobile
+                "subtitleSwitch": 0,  # Disable subtitles in output
+                "headlineSwitch": 0,  # Disable headline overlays in output
                 "filterOptions": {
                     "minTextFreeArea": 0.9,  # Require mostly text-free frames
                     "avoidTextFrames": True,  # Actively avoid frames with text

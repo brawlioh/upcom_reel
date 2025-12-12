@@ -944,3 +944,4 @@ if __name__ == "__main__":
     # python3 main.py --module 1 --game 1091500        # Run only intro module
     # python3 main.py --module 2 --game "Elden Ring"   # Run only Vizard module
     # python3 main.py --module 3 --game 1091500 --aks-url "https://www.allkeyshop.com/blog/buy-game-name-cd-key-compare-prices/"  # Run price comparison module with custom URL
+    

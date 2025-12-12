@@ -550,10 +550,6 @@ class PriceComparisonGenerator:
             # Remove any non-alphanumeric characters except hyphens
             text = re.sub(r'[^a-z0-9-]', '', text)
             
-            # Handle specific game name issues
-            if text == 'battlefield-6':
-                text = 'battlefield-2042'
-                
             # Prevent URLs ending with a hyphen
             text = text.rstrip('-')
             
@@ -630,37 +626,6 @@ class PriceComparisonGenerator:
                 logger.info(f"Fixed allkeyshop URL with wrong format (case 5): {allkeyshop_url}")
                 return allkeyshop_url
             
-            # Check for specific game patterns
-            game_title_lower = game_title.lower() if game_title else ""
-            
-            # Game specific URL patterns
-            # Fix Europa Universalis URL - known issue
-            if game_title and "europa universalis" in game_title_lower and "europa-universalis-" in allkeyshop_url.lower():
-                # Strip any number after europa-universalis-
-                match = re.search(r'(europa-universalis-[iv]+)', allkeyshop_url.lower())
-                if match:
-                    correct_part = match.group(1)
-                    # Replace any europa-universalis-X with the correct form
-                    pattern = r'europa-universalis-[iv0-9]+'
-                    corrected_url = re.sub(pattern, correct_part, allkeyshop_url.lower())
-                    logger.info(f"Corrected Europa Universalis URL: {allkeyshop_url} -> {corrected_url}")
-                    return corrected_url
-            
-            # Fix Escape From Tarkov URL - common game in logs
-            if game_title and "escape from tarkov" in game_title_lower:
-                tarkov_url = "https://www.allkeyshop.com/blog/buy-escape-from-tarkov-cd-key-compare-prices/"
-                logger.info(f"Using fixed URL for Escape from Tarkov: {tarkov_url}")
-                return tarkov_url
-                
-            # Handle Battlefield special case (it's actually Battlefield 2042)
-            if game_title and ("battlefield 6" in game_title_lower or 
-                              "battlefield vi" in game_title_lower or 
-                              ("battlefield" in game_title_lower and "6" in game_title_lower) or
-                              (allkeyshop_url and "battlefield" in allkeyshop_url.lower())):
-                bf_url = "https://www.allkeyshop.com/blog/buy-battlefield-2042-cd-key-compare-prices/"
-                logger.info(f"Using correct URL for Battlefield 2042: {bf_url}")
-                return bf_url
-                
             # Ensure URL ends with a trailing slash for API compatibility
             if not allkeyshop_url.endswith('/'):
                 allkeyshop_url += '/'
@@ -839,20 +804,23 @@ class PriceComparisonGenerator:
             # List of potential URLs to try
             image_urls = []
             
-            # Known game-specific Steam App IDs to try
-            known_app_ids = {
-                "escape from tarkov": ["1905180", "1905181", "1995750"],
-                "battlefield": ["1517290", "1238820", "1238810", "1517610"],  # Battlefield 2042, BF1, BF5
-                "europa universalis": ["236850", "236860", "236870"],  # EU IV
-            }
-            
-            # If the game title matches a known game, add its known app IDs
+            # We'll use the provided steam_app_id directly instead of hardcoded mappings
+            # This is more maintainable and allows the pipeline to handle new games easily
             game_title_lower = game_title.lower()
             additional_app_ids = []
-            for key, app_ids in known_app_ids.items():
-                if key in game_title_lower:
-                    additional_app_ids.extend(app_ids)
-                    logger.info(f"Added known Steam App IDs for {key}: {app_ids}")
+            
+            # If steam_app_id is provided, use it directly - no need for hardcoded lists
+            if steam_app_id:
+                additional_app_ids.append(steam_app_id)
+                logger.info(f"Using provided Steam App ID: {steam_app_id} for {game_title}")
+                
+                # Try variations of the App ID (sometimes adding/subtracting 1 works too)
+                try:
+                    app_id_int = int(steam_app_id)
+                    for offset in [-1, 1, 2, -2]:
+                        additional_app_ids.append(str(app_id_int + offset))
+                except (ValueError, TypeError):
+                    pass  # Not a numeric app ID, skip variations
             
             # Ensure steam_app_id is a string
             if steam_app_id and not isinstance(steam_app_id, str):
@@ -938,58 +906,8 @@ class PriceComparisonGenerator:
                     f"https://cdn.cloudflare.steamstatic.com/steam/apps/{no_spaces}/header.jpg"
                 ])
                 
-            # 5. Try IGDB API images if we have API access (future implementation)
-            # This would require additional API setup
-            
-            # 6. Add specific cases for problematic games
-            game_title_lower = game_title.lower()
-            
-            # Inazuma Eleven case
-            if 'inazuma eleven' in game_title_lower:
-                # Known URLs for Inazuma Eleven games
-                image_urls.extend([
-                    "https://cdn.akamai.steamstatic.com/steam/apps/1379220/header.jpg",  # Inazuma Eleven: Victory Road
-                    "https://assets.nintendo.com/image/upload/ar_16:9,c_lpad,w_656/b_white/f_auto/q_auto/ncom/software/switch/70010000062372/9a46530a9dc83295abcadc4821f9c8431a72cfb11c321c59b307bbe19f4aa0c8",
-                    "https://assets-prd.ignimgs.com/2023/02/19/inazuma-eleven-victory-road-button-1676832372149.jpg",
-                    "https://image.api.playstation.com/vulcan/ap/rnd/202302/1708/9cb36e44265589888abcad5a2bea677602438ec6da2a3.png"
-                ])
-                
-            # Dispatch case
-            elif 'dispatch' in game_title_lower:
-                image_urls.extend([
-                    "https://cdn.cloudflare.steamstatic.com/steam/apps/2221430/header.jpg",  # Likely Dispatch game on Steam
-                    "https://cdn.akamai.steamstatic.com/steam/apps/2221430/header.jpg",
-                    "https://cdn.steamgriddb.com/grid/f6c1f2c6b33ffec63dec050a617ddf9b.jpg", # SteamGridDB image
-                    "https://assets-prd.ignimgs.com/2023/09/22/dispatch-1695411159724.jpeg", # IGN image
-                    "https://cdn.akamai.steamstatic.com/steam/apps/971240/header.jpg"  # Alternate ID
-                ])
-                
-            # Escape from Tarkov case - very important
-            elif 'escape from tarkov' in game_title_lower:
-                # Direct URLs for Escape from Tarkov that work
-                image_urls.extend([
-                    # Main URLs we know work for Escape from Tarkov
-                    "https://cdn.cloudflare.steamstatic.com/steam/apps/1905180/header.jpg",
-                    "https://cdn.akamai.steamstatic.com/steam/apps/1905180/header.jpg",
-                    "https://cdn.cloudflare.steamstatic.com/steam/apps/1995750/header.jpg",
-                    
-                    # Non-Steam sources for Escape from Tarkov
-                    "https://upload.wikimedia.org/wikipedia/en/4/41/Escape_from_Tarkov_cover_art.jpg",
-                    "https://cdn.steamgriddb.com/grid/4c51cd6a5936ff15edc8faf3091e7a01.png",
-                    "https://i.ytimg.com/vi/IPlneoigIRE/maxresdefault.jpg",
-                    "https://assets-prd.ignimgs.com/2021/12/12/escape-from-tarkov-button-1639339565913.jpg"
-                ])
-            
-            # 7. Add fallback generic images for common game types
-            if any(term in game_title.lower() for term in ['football', 'soccer', 'fifa']):
-                image_urls.append("https://cdn.cloudflare.steamstatic.com/steam/apps/1811260/header.jpg")  # EA Sports FC 24
-            elif any(term in game_title.lower() for term in ['call of duty', 'battlefield', 'shooter']):
-                image_urls.append("https://cdn.cloudflare.steamstatic.com/steam/apps/1938090/header.jpg")  # Call of Duty: Modern Warfare III
-            elif any(term in game_title.lower() for term in ['racing', 'rally', 'car']):
-                image_urls.append("https://cdn.cloudflare.steamstatic.com/steam/apps/2757180/header.jpg")  # F1 24
-            
             # 8. Add a completely generic game image as last resort
-            image_urls.append("https://cdn.cloudflare.steamstatic.com/steam/clusters/sale_autumn2019_assets/54b5034d397bce35/sale_page_bg_english.jpg?t=1574876823")
+            image_urls.append("https://res.cloudinary.com/dodod8s0v/image/upload/v1759926961/outro_2_crwy4x.png")  # Generic fallback banner
             
             # Log all URLs we'll try
             logger.info(f"Will try downloading images from {len(image_urls)} potential URLs")
@@ -1138,35 +1056,14 @@ class PriceComparisonGenerator:
                 effective_steam_app_id = str(prices['steam_app_id']).strip()
                 logger.info(f"Using steam_app_id from prices dictionary: {effective_steam_app_id}")
             
-            # Add hardcoded known Steam App IDs for specific games if not already set
-            if not effective_steam_app_id:
-                game_title_lower = game_title.lower() if game_title else ""
-                
-                # Database of common game Steam App IDs
-                game_app_ids = {
-                    "escape from tarkov": "1905180",
-                    "battlefield 2042": "1517290",
-                    "battlefield 6": "1517290",
-                    "europa universalis iv": "236850",
-                    "europa universalis 4": "236850",
-                    "elden ring": "1245620",
-                    "cyberpunk 2077": "1091500",
-                    "call of duty": "1938090",
-                    "fifa": "1811260",
-                    "ea sports fc": "1811260"
-                }
-                
-                # Check for exact match first
-                if game_title_lower in game_app_ids:
-                    effective_steam_app_id = game_app_ids[game_title_lower]
-                    logger.info(f"Using Steam App ID for exact match '{game_title_lower}': {effective_steam_app_id}")
-                else:
-                    # Check for partial matches
-                    for key, app_id in game_app_ids.items():
-                        if key in game_title_lower:
-                            effective_steam_app_id = app_id
-                            logger.info(f"Using Steam App ID for partial match '{key}' in '{game_title_lower}': {effective_steam_app_id}")
-                            break
+            # We'll rely only on the explicitly provided steam_app_id
+            # No need for hardcoded game mappings anymore
+            
+            # Log what we're using
+            if effective_steam_app_id:
+                logger.info(f"Using provided Steam App ID: {effective_steam_app_id}")
+            else:
+                logger.info(f"No Steam App ID available for {game_title} - will attempt to find game cover without it")
             
             # Try to download the game cover using the effective Steam App ID
             # Pass the Steam App ID directly to download_game_cover
@@ -1225,14 +1122,6 @@ class PriceComparisonGenerator:
                 g = max(20, min(g, 80))
                 b = max(20, min(b, 80))
                 
-                # Special cases for known games
-                if 'inazuma eleven' in game_title_lower:
-                    logger.info("Creating themed banner for Inazuma Eleven")
-                    r, g, b = 29, 42, 80  # Deep blue for Inazuma theme
-                elif 'dispatch' in game_title_lower:
-                    logger.info("Creating themed banner for Dispatch")
-                    r, g, b = 40, 20, 30  # Dark red-purple for thriller theme
-                
                 logger.info(f"Using banner base color: rgb({r},{g},{b})")
                 banner = Image.new('RGB', (width, height), (r, g, b))
             
@@ -1241,7 +1130,7 @@ class PriceComparisonGenerator:
             
             # Set up the header region for the game image
             header_height = int(height * 0.25)  # 25% of banner height for header
-            header_y = int(height * 0.04)  # Position near top of banner
+            header_y = int(height * 0.12)  # Position lower as per screenshot (increased from 0.04 to 0.12)
             
             # Place the game header image at the top of the banner
             if banner_image and img_width > 0 and img_height > 0:  # Ensure valid dimensions
@@ -1302,7 +1191,7 @@ class PriceComparisonGenerator:
                 if self.system_bold_font:
                     # No title font needed anymore since we're using the original logo
                     discount_font = ImageFont.truetype(self.system_bold_font, 150)  # Discount font size matches reference
-                    price_value_font = ImageFont.truetype(self.system_bold_font, 90)  # Price value font
+                    price_value_font = ImageFont.truetype(self.system_bold_font, 100)  # Increased from 90 to 100 for better visibility in the green box
                 else:
                     logger.warning("No bold system font found, using default")  
                     discount_font = ImageFont.load_default()
@@ -1310,7 +1199,7 @@ class PriceComparisonGenerator:
                     
                 # Regular font for labels
                 if self.system_regular_font:
-                    price_label_font = ImageFont.truetype(self.system_regular_font, 70)  # Labels slightly smaller than values
+                    price_label_font = ImageFont.truetype(self.system_regular_font, 80)  # Increased from 70 to 80 for better readability
                 else:
                     logger.warning("No regular system font found, using default")
                     price_label_font = ImageFont.load_default()
@@ -1336,8 +1225,8 @@ class PriceComparisonGenerator:
                         if os.path.exists(path):
                             # No title font needed anymore since we're using the original logo
                             discount_font = ImageFont.truetype(path, 150)  # Matches reference image
-                            price_label_font = ImageFont.truetype(path, 70)  # Labels slightly smaller
-                            price_value_font = ImageFont.truetype(path, 90)  # Price values
+                            price_label_font = ImageFont.truetype(path, 80)  # Increased from 70 to 80 for better readability
+                            price_value_font = ImageFont.truetype(path, 100)  # Increased from 90 to 100 for better visibility in the green box
                             logger.info(f"Using Arial font at: {path}")
                             break
                     else:  # If loop completes without break
@@ -1359,9 +1248,9 @@ class PriceComparisonGenerator:
             # No title text needed - the game image already has the title
             discount_y = height // 2 + 100  # Discount in the middle
             
-            # Move prices up to match the green box in the screenshot
-            allkeyshop_y = int(height * 0.63)  # AllKeyShop price - moved up as requested
-            steam_y = int(height * 0.67)  # Steam price - moved up to match the green box position
+            # Position prices to match the green box in the screenshot
+            allkeyshop_y = int(height * 0.63)  # AllKeyShop price
+            steam_y = int(height * 0.69)  # Steam price - adjusted for better spacing in the green box
             
             # Draw discount percentage if applicable - EXTREMELY LARGE & BOLD
             if discount_percentage and discount_percentage > 0:
@@ -1403,6 +1292,22 @@ class PriceComparisonGenerator:
             formatted_steam_price = steam_price.replace('€', '') + '€' if '€' in steam_price else steam_price
             
             # Draw AllKeyShop price - simplified labels as in reference
+            # Add black outline for the label to make it more readable in green box
+            outline_width = 2  # Thin outline for price labels
+            outline_color = (0, 0, 0)  # Black outline
+            
+            # Draw outline for ALLKEYSHOP label
+            for x_offset in [-outline_width, outline_width]:
+                for y_offset in [-outline_width, outline_width]:
+                    draw.text(
+                        (width // 2 + x_offset, allkeyshop_y + y_offset),
+                        "ALLKEYSHOP:",
+                        font=price_label_font,
+                        fill=outline_color,
+                        anchor="rm"  # Right-middle alignment
+                    )
+            
+            # Draw the actual label
             draw.text(
                 (width // 2, allkeyshop_y),
                 "ALLKEYSHOP:", # Changed from "ALLKEYSHOP PRICE" to match reference
@@ -1412,7 +1317,18 @@ class PriceComparisonGenerator:
             )
             
             # Draw price next to label (not below)
-            # Use a brighter lime-green color to match reference exactly
+            # Add outline to price value for better readability in green box
+            for x_offset in [-outline_width, outline_width]:
+                for y_offset in [-outline_width, outline_width]:
+                    draw.text(
+                        (width // 2 + 20 + x_offset, allkeyshop_y + y_offset),
+                        formatted_aks_price,
+                        font=price_value_font,
+                        fill=outline_color,
+                        anchor="lm"  # Left-middle alignment
+                    )
+            
+            # Draw the actual price with a brighter lime-green color to match reference
             draw.text(
                 (width // 2 + 20, allkeyshop_y),  # Small space after label
                 formatted_aks_price,
@@ -1422,6 +1338,18 @@ class PriceComparisonGenerator:
             )
             
             # Draw Steam price - simplified labels as in reference
+            # Add black outline for the STEAM label
+            for x_offset in [-outline_width, outline_width]:
+                for y_offset in [-outline_width, outline_width]:
+                    draw.text(
+                        (width // 2 + x_offset, steam_y + y_offset),
+                        "STEAM:",
+                        font=price_label_font,
+                        fill=outline_color,
+                        anchor="rm"  # Right-middle alignment
+                    )
+                    
+            # Draw the actual Steam label
             draw.text(
                 (width // 2, steam_y),
                 "STEAM:",  # Changed from "STEAM PRICE" to match reference
@@ -1430,12 +1358,23 @@ class PriceComparisonGenerator:
                 anchor="rm"  # Right-middle alignment
             )
             
-            # Draw price next to label (not below)
+            # Draw Steam price next to label with outline
+            for x_offset in [-outline_width, outline_width]:
+                for y_offset in [-outline_width, outline_width]:
+                    draw.text(
+                        (width // 2 + 20 + x_offset, steam_y + y_offset),
+                        formatted_steam_price,
+                        font=price_value_font,
+                        fill=outline_color,
+                        anchor="lm"  # Left-middle alignment
+                    )
+            
+            # Draw the actual Steam price
             draw.text(
                 (width // 2 + 20, steam_y),  # Small space after label
                 formatted_steam_price,
                 font=price_value_font,
-                fill=(150, 150, 150),  # Gray
+                fill=(180, 180, 180),  # Slightly brighter gray for better readability
                 anchor="lm"  # Left-middle alignment
             )
             
@@ -1509,25 +1448,22 @@ class PriceComparisonGenerator:
             logger.info(f"Creating game banner for: {game_title}")
             logger.info(f"Game details provided: {game_details}")
             
-            # Special handling for Battlefield 6 (which is actually Battlefield 2042)
-            if game_title and ("battlefield 6" in game_title.lower() or "battlefield vi" in game_title.lower()):
-                logger.info("Detected Battlefield 6 - converting to Battlefield 2042")
-                game_title = "Battlefield 2042"
-                # Add Steam App ID for Battlefield 2042
-                game_details['steam_app_id'] = "1517290"
-                logger.info("Added Steam App ID 1517290 for Battlefield 2042")
-                
-            # Special handling for Escape from Tarkov
-            if game_title and "escape from tarkov" in game_title.lower():
-                logger.info("Detected Escape from Tarkov - adding Steam App ID")
-                game_details['steam_app_id'] = "1905180"  # Known working App ID
-                logger.info("Added Steam App ID 1905180 for Escape from Tarkov")
-                
-            # Special handling for Europa Universalis
-            if game_title and "europa universalis" in game_title.lower():
-                logger.info("Detected Europa Universalis - adding Steam App ID")
-                game_details['steam_app_id'] = "236850"  # EU IV
-                logger.info("Added Steam App ID 236850 for Europa Universalis")
+            # Use game title for logging
+            game_title_lower = game_title.lower()
+            
+            # We'll rely on the app_id provided in game_details from main.py
+            # No need for hardcoded mappings since the pipeline handles this now
+            
+            # If app_id is present but steam_app_id is not, copy it
+            if 'app_id' in game_details and 'steam_app_id' not in game_details:
+                game_details['steam_app_id'] = game_details['app_id']
+                logger.info(f"Using app_id as steam_app_id: {game_details['app_id']}")
+            
+            # Log if we have a Steam App ID
+            if 'steam_app_id' in game_details:
+                logger.info(f"Using Steam App ID: {game_details['steam_app_id']} for {game_title}")
+            else:
+                logger.info(f"No Steam App ID found for {game_title} - will attempt to find game cover without it")
             
             # Ensure we have game details dictionary
             if game_details is None or not isinstance(game_details, dict):
