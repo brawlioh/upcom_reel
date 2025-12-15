@@ -309,9 +309,11 @@ async def run_automation_job(job_id: str, request: AutomationRequest):
             game_details = {}
             
             if request.steam_app_id:
-                game_details = automation.steam_scraper.get_game_details(request.steam_app_id)
-                if game_details:
-                    game_title = game_details.get('title', game_title)
+                # Use steam_scraper only if available (requires Selenium)
+                if automation.steam_scraper:
+                    game_details = automation.steam_scraper.get_game_details(request.steam_app_id)
+                    if game_details:
+                        game_title = game_details.get('title', game_title)
             
             # Add custom video URL if provided
             if request.custom_video_url:

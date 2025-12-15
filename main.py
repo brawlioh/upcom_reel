@@ -355,9 +355,10 @@ class YouTubeReelsAutomation:
             # Create reels
             created_reels = []
             for game in unique_games[:count]:
-                # Get additional details
-                details = self.steam_scraper.get_game_details(game['url'])
-                game.update(details)
+                # Get additional details (only if steam_scraper is available)
+                if self.steam_scraper:
+                    details = self.steam_scraper.get_game_details(game['url'])
+                    game.update(details)
                 
                 reel_path = await self.create_reel_for_game(game)
                 if reel_path:
