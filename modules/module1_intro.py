@@ -959,22 +959,11 @@ class IntroGenerator:
             # Generate script without price comparison information
             script = await self.generate_intro_script(game_title, game_details)
             
-            try:
-                # Generate video with HeyGen
-                video_path = await self.generate_heygen_video(script, game_title)
-                
-                logger.info(f"Intro created successfully: {video_path}")
-                return video_path
-            except Exception as heygen_error:
-                logger.warning(f"HeyGen automatic video generation failed: {heygen_error}")
-                logger.warning("Falling back to manual download prompt")
-                
-                # Generate a random task_id for manual download in case we don't have one
-                import uuid
-                task_id = str(uuid.uuid4()).replace('-', '')
-                
-                # Direct user to manual download process
-                return await self._prompt_manual_download("https://app.heygen.com/", task_id, game_title)
+            # Generate video with HeyGen
+            video_path = await self.generate_heygen_video(script, game_title)
+            
+            logger.info(f"Intro created successfully: {video_path}")
+            return video_path
                 
         except Exception as e:
             logger.error(f"Error creating intro: {e}")
