@@ -481,11 +481,42 @@ async def stop_job(job_id: str):
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
     await manager.connect(websocket)
+    
+    # Send initial connection confirmation
+    await websocket.send_text(json.dumps({
+        'type': 'connection_established',
+        'message': 'WebSocket connected successfully'
+    }))
+    
     try:
         while True:
-            # Keep connection alive
-            await websocket.receive_text()
+            try:
+                # Wait for messages with timeout
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                
+                # Handle ping/pong for heartbeat
+                if message == 'ping':
+                    await websocket.send_text('pong')
+                elif message == 'pong':
+                    # Client responded to server ping
+                    pass
+                    
+            except asyncio.TimeoutError:
+                # Send ping to check if client is still alive
+                try:
+                    await websocket.send_text(json.dumps({'type': 'ping'}))
+                except Exception:
+                    # Connection is dead, break out
+                    break
+            except Exception as e:
+                logger.warning(f"WebSocket receive error: {e}")
+                break
+                
     except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
         manager.disconnect(websocket)
 
 @app.post("/api/validation/steam-app-id")
