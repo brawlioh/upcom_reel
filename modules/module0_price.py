@@ -1199,7 +1199,7 @@ class PriceComparisonGenerator:
                     
                 # Regular font for labels
                 if self.system_regular_font:
-                    price_label_font = ImageFont.truetype(self.system_regular_font, 80)  # Increased from 70 to 80 for better readability
+                    price_label_font = ImageFont.truetype(self.system_regular_font, 60)  # Reduced from 80 to 60 to prevent ALLKEYSHOP cropping
                 else:
                     logger.warning("No regular system font found, using default")
                     price_label_font = ImageFont.load_default()
@@ -1225,7 +1225,7 @@ class PriceComparisonGenerator:
                         if os.path.exists(path):
                             # No title font needed anymore since we're using the original logo
                             discount_font = ImageFont.truetype(path, 150)  # Matches reference image
-                            price_label_font = ImageFont.truetype(path, 80)  # Increased from 70 to 80 for better readability
+                            price_label_font = ImageFont.truetype(path, 60)  # Reduced from 80 to 60 to prevent ALLKEYSHOP cropping
                             price_value_font = ImageFont.truetype(path, 100)  # Increased from 90 to 100 for better visibility in the green box
                             logger.info(f"Using Arial font at: {path}")
                             break
