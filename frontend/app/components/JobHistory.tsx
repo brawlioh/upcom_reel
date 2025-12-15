@@ -17,13 +17,20 @@ export default function JobHistory() {
       if (currentJob.status === 'completed' && prevStatusRef.current !== 'completed') {
         // Auto-refresh job list
         fetchAllJobs()
-        // Auto-select the completed job
+        // Auto-select the completed job and show preview
         setSelectedJob(currentJob)
-        setShowPreview(false)
+        setShowPreview(true)  // Auto-show video preview when job completes
       }
       prevStatusRef.current = currentJob.status
     }
   }, [currentJob?.status, currentJob?.job_id, fetchAllJobs])
+
+  // Also select current job if nothing is selected and there's an active job
+  useEffect(() => {
+    if (!selectedJob && currentJob) {
+      setSelectedJob(currentJob)
+    }
+  }, [currentJob, selectedJob])
 
   // Update selected job when currentJob updates (for real-time sync)
   useEffect(() => {

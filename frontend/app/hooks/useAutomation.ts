@@ -509,16 +509,23 @@ export function useAutomation() {
           // Update current job with latest status
           setCurrentJob(updatedJob)
           
-          // Update jobs list
-          setJobs(prev => prev.map(job => 
-            job.job_id === updatedJob.job_id ? updatedJob : job
-          ))
+          // Update jobs list - add if not exists, update if exists
+          setJobs(prev => {
+            const exists = prev.some(job => job.job_id === updatedJob.job_id)
+            if (exists) {
+              return prev.map(job => job.job_id === updatedJob.job_id ? updatedJob : job)
+            } else {
+              return [updatedJob, ...prev]
+            }
+          })
           
           console.log(`Polling update: Step ${updatedJob.current_step}, Status: ${updatedJob.status}, Progress: ${updatedJob.progress}%`)
           
           // Stop polling if job is completed or failed
           if (updatedJob.status === 'completed' || updatedJob.status === 'failed') {
             console.log(`Job ${updatedJob.status}, stopping polling`)
+            // Refresh the full jobs list to ensure we have latest data
+            fetchAllJobs()
             if (pollingIntervalRef.current) {
               clearInterval(pollingIntervalRef.current)
               pollingIntervalRef.current = null

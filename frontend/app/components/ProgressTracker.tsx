@@ -77,8 +77,10 @@ export default function ProgressTracker({ currentStep, totalSteps, isRunning }: 
       {/* Steps */}
       <div className="space-y-0.5">
         {steps.map((step) => {
-          const isCompleted = actualCurrentStep > step.id
-          const isCurrent = actualCurrentStep === step.id && actualIsRunning
+          // Fix: Mark step as completed if current_step > step.id OR if job is completed and this is the final step
+          const isJobCompleted = currentJob?.status === 'completed'
+          const isCompleted = actualCurrentStep > step.id || (isJobCompleted && step.id <= actualCurrentStep)
+          const isCurrent = actualCurrentStep === step.id && actualIsRunning && !isJobCompleted
           const isPending = actualCurrentStep < step.id
           
           // Check for module-specific errors
