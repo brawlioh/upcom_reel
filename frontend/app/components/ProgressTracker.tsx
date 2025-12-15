@@ -49,7 +49,10 @@ export default function ProgressTracker({ currentStep, totalSteps, isRunning }: 
   const actualCurrentStep = currentJob?.current_step || currentStep
   const actualTotalSteps = currentJob?.total_steps || totalSteps
   const actualIsRunning = currentJob?.status === 'running' || currentJob?.status === 'queued' || isRunning
-  const progress = actualCurrentStep > 0 ? (actualCurrentStep / actualTotalSteps) * 100 : 0
+  const progress = currentJob?.progress || (actualCurrentStep > 0 ? (actualCurrentStep / actualTotalSteps) * 100 : 0)
+  
+  // Job is completed if status is 'completed' OR if progress is 100%
+  const isJobCompleted = currentJob?.status === 'completed' || progress >= 100
 
   return (
     <div className="card">
@@ -77,11 +80,10 @@ export default function ProgressTracker({ currentStep, totalSteps, isRunning }: 
       {/* Steps */}
       <div className="space-y-0.5">
         {steps.map((step) => {
-          // Fix: Mark step as completed if current_step > step.id OR if job is completed and this is the final step
-          const isJobCompleted = currentJob?.status === 'completed'
+          // Mark step as completed if: current_step > step.id OR job is completed (status or 100% progress)
           const isCompleted = actualCurrentStep > step.id || (isJobCompleted && step.id <= actualCurrentStep)
           const isCurrent = actualCurrentStep === step.id && actualIsRunning && !isJobCompleted
-          const isPending = actualCurrentStep < step.id
+          const isPending = actualCurrentStep < step.id && !isJobCompleted
           
           // Check for module-specific errors
           const hasFailed = currentJob?.status === 'failed' && 
