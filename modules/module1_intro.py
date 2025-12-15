@@ -422,7 +422,39 @@ class IntroGenerator:
                             
                             # If video is complete, extract URL with a simplified approach
                             if is_completed:
-                                # Prefer captioned URL if available (matches Make/HeyGen screenshot "video_url_caption")
+                                logger.info(f"✅ Video completed! Full response data: {json.dumps(data)}")
+                                
+                                # First, try to get video URL directly using the download API with task_id
+                                # This is the most reliable method
+                                try:
+                                    download_api_url = "https://api.heygen.com/v1/video.download"
+                                    download_headers = {
+                                        "accept": "application/json",
+                                        "content-type": "application/json",
+                                        "x-api-key": Config.HEYGEN_API_KEY
+                                    }
+                                    download_payload = {
+                                        "video_id": task_id,
+                                        "captioned": True
+                                    }
+                                    
+                                    logger.info(f"Requesting captioned video download URL using task_id: {task_id}")
+                                    async with session.post(download_api_url, json=download_payload, headers=download_headers) as download_response:
+                                        if download_response.status == 200:
+                                            download_result = await download_response.json()
+                                            download_url = download_result.get('data', {}).get('url')
+                                            if download_url:
+                                                logger.info(f"✅ Successfully obtained captioned video URL: {download_url}")
+                                                return download_url
+                                            else:
+                                                logger.warning(f"HeyGen download API response: {download_result}")
+                                        else:
+                                            error_text = await download_response.text()
+                                            logger.warning(f"HeyGen download API error: {download_response.status} - {error_text}")
+                                except Exception as e:
+                                    logger.warning(f"Error using download API: {e}")
+                                
+                                # Fallback: Try to extract URL from status response
                                 video_url = (
                                     data.get('video_url_caption')
                                     or data.get('video_url')
@@ -431,7 +463,6 @@ class IntroGenerator:
                                 
                                 # If not found at top level, check nested structures
                                 if not video_url:
-                                    # Check in nested data
                                     nested_data = data.get('data', {})
                                     if isinstance(nested_data, dict):
                                         video_url = (
@@ -440,7 +471,6 @@ class IntroGenerator:
                                             or nested_data.get('url')
                                         )
                                     
-                                    # Check in result
                                     if not video_url:
                                         result_data = data.get('result', {})
                                         if isinstance(result_data, dict):
@@ -452,55 +482,10 @@ class IntroGenerator:
                                 
                                 # Return URL if valid
                                 if video_url and isinstance(video_url, str) and video_url.startswith('http'):
-                                    logger.info(f"✅ Found HeyGen video URL: {video_url}")
-                                    
-                                    # Extract video ID from URL for direct API download
-                                    try:
-                                        # Try to extract video ID from URL path
-                                        from urllib.parse import urlparse
-                                        path_parts = urlparse(video_url).path.split('/')
-                                        video_id = None
-                                        for part in path_parts:
-                                            if part and len(part) > 20:  # Video IDs are typically long strings
-                                                video_id = part
-                                                break
-                                        
-                                        # Use video ID for captioned download
-                                        if video_id:
-                                            logger.info(f"🔤 Found video ID for captioned download: {video_id}")
-                                            
-                                            # Rather than returning a dict, call the download API directly here
-                                            download_api_url = "https://api.heygen.com/v1/video.download"
-                                            download_headers = {
-                                                "accept": "application/json",
-                                                "content-type": "application/json",
-                                                "x-api-key": Config.HEYGEN_API_KEY
-                                            }
-                                            download_payload = {
-                                                "video_id": video_id,
-                                                "captioned": True
-                                            }
-                                            
-                                            logger.info(f"Requesting captioned video download URL from HeyGen API")
-                                            async with session.post(download_api_url, json=download_payload, headers=download_headers) as download_response:
-                                                if download_response.status == 200:
-                                                    download_result = await download_response.json()
-                                                    download_url = download_result.get('data', {}).get('url')
-                                                    if download_url:
-                                                        logger.info(f"✅ Successfully obtained URL for video WITH captions: {download_url}")
-                                                        return download_url
-                                                    else:
-                                                        logger.warning(f"HeyGen download API didn't return a URL: {download_result}")
-                                                else:
-                                                    error_text = await download_response.text()
-                                                    logger.warning(f"HeyGen download API error: {download_response.status} - {error_text}")
-                                    except Exception as e:
-                                        logger.warning(f"Error extracting video ID or using download API: {e}")
-                                    
-                                    # Just return the direct URL as a fallback
+                                    logger.info(f"✅ Found HeyGen video URL from status: {video_url}")
                                     return video_url
                                 else:
-                                    logger.warning("Video marked as complete but URL not found in response")
+                                    logger.warning("Video completed but no downloadable URL found - will retry")
                             
                             # Handle failed status
                             elif (status and status.lower() == 'failed') or (state and state.lower() == 'failed'):
