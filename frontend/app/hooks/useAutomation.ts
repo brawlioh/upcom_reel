@@ -166,15 +166,31 @@ export function useAutomation() {
               
             case 'job_completed':
               console.log('Job completed:', data.result_path)
-              // Update current job immediately
-              if (data.data) {
-                setCurrentJob(data.data)
-              } else {
-                // Fallback: fetch job status
-                fetchJobStatus(data.job_id).catch(err => {
-                  console.error('Error fetching completed job status:', err)
-                })
-              }
+              // Update current job with completion data
+              setCurrentJob(prev => prev ? {
+                ...prev,
+                status: 'completed',
+                progress: 100,
+                current_step: 4,
+                step_name: 'Final Compilation',
+                result_path: data.result_path,
+                online_url: data.result_path, // Assuming result_path is the online URL
+                completed_at: new Date().toISOString()
+              } : null)
+              
+              // Update jobs list
+              setJobs(prev => prev.map(job => 
+                job.job_id === data.job_id ? {
+                  ...job,
+                  status: 'completed',
+                  progress: 100,
+                  current_step: 4,
+                  step_name: 'Final Compilation',
+                  result_path: data.result_path,
+                  online_url: data.result_path,
+                  completed_at: new Date().toISOString()
+                } : job
+              ))
               return
               
             case 'job_failed':

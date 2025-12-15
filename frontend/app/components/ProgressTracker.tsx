@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle, Circle, Loader2, Video, Monitor, Image, Settings, AlertCircle } from 'lucide-react'
+import { CheckCircle, Circle, Loader2, Video, Monitor, Image, Settings, AlertCircle, ExternalLink, Eye } from 'lucide-react'
 import { useAutomation } from '../hooks/useAutomation'
 import { useError } from '../contexts/ErrorContext'
 
@@ -159,22 +159,74 @@ export default function ProgressTracker({ currentStep, totalSteps, isRunning }: 
 
       {/* Job Status */}
       {currentJob && currentJob.status === 'completed' && (
-        <div className="mt-4 p-3 bg-green-600/10 border border-green-600/20 rounded-lg">
+        <div className="mt-4 p-4 bg-green-600/10 border border-green-600/20 rounded-lg">
           <div className="flex items-start">
             <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 mr-2 flex-shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-400">
+              <p className="text-sm font-medium text-green-400 mb-3">
                 Automation completed successfully!
               </p>
+              
               {currentJob.result_path && (
-                <p className="text-xs text-dark-400 mt-1">
-                  Output: {currentJob.result_path}
-                </p>
+                <div className="space-y-3">
+                  {/* Video URL Display */}
+                  <div className="bg-dark-800/50 rounded-lg p-3 border border-green-600/10">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Video className="w-4 h-4 text-green-400" />
+                      <span className="text-sm font-medium text-white">Final Video URL</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-1 min-w-0">
+                        <a 
+                          href={currentJob.result_path} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors break-all"
+                        >
+                          {currentJob.result_path}
+                        </a>
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(currentJob.result_path)}
+                        className="px-2 py-1 text-xs bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded transition-colors"
+                      >
+                        Copy
+                      </button>
+                      <a
+                        href={currentJob.result_path}
+                        target="_blank"
+                        rel="noopener noreferrer" 
+                        className="p-1 text-green-400 hover:text-green-300 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                  
+                  {/* Video Preview */}
+                  <div className="bg-dark-800/50 rounded-lg p-3 border border-green-600/10">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <Eye className="w-4 h-4 text-green-400" />
+                      <span className="text-sm font-medium text-white">Video Preview</span>
+                    </div>
+                    
+                    <div className="relative">
+                      <video 
+                        controls 
+                        className="w-full max-w-md mx-auto rounded-lg bg-black"
+                        preload="metadata"
+                      >
+                        <source src={currentJob.result_path} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  </div>
+                </div>
               )}
               
-              {/* Info about completed job */}
-              <p className="text-xs text-dark-400 mt-2 italic">
-                The automation has completed successfully. Your results are ready to use.
+              <p className="text-xs text-dark-400 mt-3 italic">
+                Your YouTube Reel is ready! You can preview it above or open the URL in a new tab.
               </p>
             </div>
           </div>
