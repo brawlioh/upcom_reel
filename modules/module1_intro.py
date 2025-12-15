@@ -290,20 +290,20 @@ class IntroGenerator:
                             
                             if video_url and video_url.startswith('http'):
                                 logger.info(f"Got video URL: {video_url}")
-                                try:
-                                    # Attempt automatic download
-                                    cloudinary_url = await self._download_video(session, video_url, game_title, "intro")
-                                    if cloudinary_url:
-                                        logger.info(f"✅ HeyGen video processed and uploaded to Cloudinary: {cloudinary_url}")
-                                        return cloudinary_url
-                                    else:
-                                        # Fall back to manual method if download didn't return a URL
-                                        logger.warning("Automatic download failed, switching to manual mode")
-                                        return await self._prompt_manual_download(video_url, task_id, game_title)
-                                except Exception as download_error:
-                                    # If any exception occurs during download, switch to manual mode
-                                    logger.warning(f"Download error: {download_error}, switching to manual mode")
-                                    return await self._prompt_manual_download(video_url, task_id, game_title)
+                                
+                                # Check if this is a dashboard URL (can't be downloaded automatically)
+                                if "app.heygen.com/videos" in video_url:
+                                    dashboard_url = video_url
+                                    logger.error(f"HeyGen returned dashboard URL instead of downloadable URL: {dashboard_url}")
+                                    raise Exception(f"HeyGen video ready but requires manual download. Dashboard URL: {dashboard_url}")
+                                
+                                # Attempt automatic download
+                                cloudinary_url = await self._download_video(session, video_url, game_title, "intro")
+                                if cloudinary_url:
+                                    logger.info(f"✅ HeyGen video processed and uploaded to Cloudinary: {cloudinary_url}")
+                                    return cloudinary_url
+                                else:
+                                    raise Exception(f"Failed to download/upload video from URL: {video_url}")
                             else:
                                 raise Exception("Failed to get valid video URL from polling")
                         else:
