@@ -896,6 +896,15 @@ class IntroGenerator:
         # Generate the dashboard URL where the user can view and download the video
         dashboard_url = f"https://app.heygen.com/videos/{task_id}"
         
+        # Check if running in production (Railway) - no interactive terminal available
+        is_production = os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RAILWAY_PROJECT_ID')
+        
+        if is_production:
+            # In production, we can't use input() - raise error with the dashboard URL
+            logger.error(f"Manual download required but running in production mode")
+            logger.error(f"HeyGen Dashboard URL: {dashboard_url}")
+            raise Exception(f"HeyGen video generation requires manual intervention. Video available at: {dashboard_url}")
+        
         # Print instructions with clear formatting to make them stand out
         print("\n" + "=" * 80)
         print("⚠️  MANUAL ACTION REQUIRED: HeyGen Video Download  ⚠️")
