@@ -40,8 +40,22 @@ export default function JobHistory() {
   }, [currentJob])
 
   // Get the video URL (prefer online_url, fallback to result_path)
+  // Ensure we return a string, not an object
   const getVideoUrl = (job: AutomationJob): string | undefined => {
-    return job.online_url || job.result_path
+    const url = job.online_url || job.result_path
+    // Handle case where url might be an object
+    if (typeof url === 'object' && url !== null) {
+      return (url as any).url || (url as any).online_url || String(url)
+    }
+    return typeof url === 'string' ? url : undefined
+  }
+
+  // Safe string renderer to prevent React error #31
+  const safeString = (value: any): string => {
+    if (value === null || value === undefined) return ''
+    if (typeof value === 'string') return value
+    if (typeof value === 'object') return JSON.stringify(value)
+    return String(value)
   }
 
   // Combine current job with historical jobs, avoiding duplicates
@@ -129,7 +143,7 @@ export default function JobHistory() {
                   {getStatusIcon(job.status)}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-white truncate">
-                      {job.game_title || `Steam App ${job.steam_app_id}` || 'Unknown Game'}
+                      {safeString(job.game_title) || `Steam App ${safeString(job.steam_app_id)}` || 'Unknown Game'}
                     </p>
                     <p className="text-xs text-dark-400">
                       {job.status === 'running' ? (
@@ -202,13 +216,13 @@ export default function JobHistory() {
             {selectedJob.step_name && (
               <div className="flex justify-between">
                 <span className="text-dark-400">Current Step:</span>
-                <span className="text-white">{selectedJob.step_name}</span>
+                <span className="text-white">{safeString(selectedJob.step_name)}</span>
               </div>
             )}
 
             {selectedJob.error_message && (
               <div className="mt-2 p-2 bg-red-600/10 border border-red-600/20 rounded text-red-400">
-                {selectedJob.error_message}
+                {safeString(selectedJob.error_message)}
               </div>
             )}
 
