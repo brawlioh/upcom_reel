@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Clock, CheckCircle, XCircle, Loader2, ExternalLink, Play, Video } from 'lucide-react'
 import { useAutomation, type AutomationJob } from '../hooks/useAutomation'
 
@@ -8,6 +8,34 @@ export default function JobHistory() {
   const { jobs, currentJob, fetchAllJobs } = useAutomation()
   const [selectedJob, setSelectedJob] = useState<AutomationJob | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const prevStatusRef = useRef<string | undefined>(undefined)
+
+  // Auto-refresh and auto-select when job completes
+  useEffect(() => {
+    if (currentJob) {
+      // Check if job just completed (status changed to completed)
+      if (currentJob.status === 'completed' && prevStatusRef.current !== 'completed') {
+        // Auto-refresh job list
+        fetchAllJobs()
+        // Auto-select the completed job
+        setSelectedJob(currentJob)
+        setShowPreview(false)
+      }
+      prevStatusRef.current = currentJob.status
+    }
+  }, [currentJob?.status, currentJob?.job_id, fetchAllJobs])
+
+  // Update selected job when currentJob updates (for real-time sync)
+  useEffect(() => {
+    if (selectedJob && currentJob && selectedJob.job_id === currentJob.job_id) {
+      setSelectedJob(currentJob)
+    }
+  }, [currentJob])
+
+  // Get the video URL (prefer online_url, fallback to result_path)
+  const getVideoUrl = (job: AutomationJob): string | undefined => {
+    return job.online_url || job.result_path
+  }
 
   // Combine current job with historical jobs, avoiding duplicates
   const allJobs = currentJob 
@@ -178,8 +206,14 @@ export default function JobHistory() {
             )}
 
             {/* Video Preview & Actions */}
-            {selectedJob.status === 'completed' && selectedJob.result_path && (
+            {selectedJob.status === 'completed' && getVideoUrl(selectedJob) && (
               <div className="mt-3 space-y-2">
+                {/* Video URL Display */}
+                <div className="p-2 bg-dark-700/50 rounded text-xs break-all">
+                  <span className="text-dark-400">URL: </span>
+                  <span className="text-blue-400">{getVideoUrl(selectedJob)}</span>
+                </div>
+
                 <button
                   onClick={() => setShowPreview(!showPreview)}
                   className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -192,17 +226,20 @@ export default function JobHistory() {
                   <div className="mt-2">
                     <video 
                       controls 
+                      autoPlay
                       className="w-full rounded-lg bg-black"
-                      preload="metadata"
+                      preload="auto"
+                      crossOrigin="anonymous"
                     >
-                      <source src={selectedJob.result_path} type="video/mp4" />
+                      <source src={getVideoUrl(selectedJob)} type="video/mp4" />
+                      Your browser does not support the video tag.
                     </video>
                   </div>
                 )}
 
                 <div className="flex space-x-2">
                   <a
-                    href={selectedJob.result_path}
+                    href={getVideoUrl(selectedJob)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 flex items-center justify-center space-x-1 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 text-xs font-medium rounded transition-colors"
@@ -211,7 +248,14 @@ export default function JobHistory() {
                     <span>Open URL</span>
                   </a>
                   <button
-                    onClick={() => navigator.clipboard.writeText(selectedJob.result_path || '')}
+                    onClick={() => {
+                      const url = getVideoUrl(selectedJob)
+                      if (url) {
+                        navigator.clipboard.writeText(url)
+                          .then(() => alert('URL copied to clipboard!'))
+                          .catch(() => alert('Failed to copy URL'))
+                      }
+                    }}
                     className="flex-1 px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-white text-xs font-medium rounded transition-colors"
                   >
                     Copy URL

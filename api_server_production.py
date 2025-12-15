@@ -259,6 +259,7 @@ async def start_automation(request: AutomationRequest, background_tasks: Backgro
         job_id = str(uuid.uuid4())
         
         # Create job record with validation results
+        game_name = validation_result.get('name') if request.mode == 'steam' else request.game_title
         automation_jobs[job_id] = {
             'job_id': job_id,
             'status': 'queued',
@@ -268,9 +269,11 @@ async def start_automation(request: AutomationRequest, background_tasks: Backgro
             'step_name': 'Queued - Validation passed',
             'created_at': datetime.now().isoformat(),
             'request': request.model_dump(),
+            'game_title': game_name,  # Store game title for frontend display
+            'steam_app_id': request.steam_app_id,  # Store Steam App ID
             'validation': {
                 'steam_app_id_valid': True,
-                'game_name': validation_result.get('name') if request.mode == 'steam' else None,
+                'game_name': game_name,
                 'validated_at': datetime.now().isoformat()
             }
         }
@@ -351,6 +354,8 @@ async def run_automation_job(job_id: str, request: AutomationRequest):
         automation_jobs[job_id]['completed_at'] = datetime.now().isoformat()
         automation_jobs[job_id]['result_path'] = result
         automation_jobs[job_id]['progress'] = 100
+        automation_jobs[job_id]['current_step'] = 4  # Mark final step as complete
+        automation_jobs[job_id]['step_name'] = 'Completed'
         
         # PRODUCTION: Only return real file paths, no fake URLs
         logger.info(f"✅ PRODUCTION: Job {job_id} completed with real result: {result}")
@@ -358,7 +363,9 @@ async def run_automation_job(job_id: str, request: AutomationRequest):
         await manager.broadcast(json.dumps({
             'type': 'job_completed',
             'job_id': job_id,
-            'result_path': result
+            'result_path': result,
+            'current_step': 4,
+            'progress': 100
         }))
         
     except Exception as e:
