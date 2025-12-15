@@ -27,7 +27,7 @@ interface AutomationRequest {
   count?: number
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://0.0.0.0:8000/api'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://upcomreel-production.up.railway.app/api'
 
 export function useAutomation() {
   const [currentJob, setCurrentJob] = useState<AutomationJob | null>(null)
@@ -80,7 +80,7 @@ export function useAutomation() {
         }
       }
       
-      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://0.0.0.0:8000/ws'
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'wss://upcomreel-production.up.railway.app/ws'
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
       
@@ -305,7 +305,7 @@ export function useAutomation() {
       console.log('Checking API health before starting automation...')
       const health = await checkHealth()
       if (!health) {
-        const errorMessage = 'Cannot connect to API server. Make sure the API server is running at http://0.0.0.0:8000.'
+        const errorMessage = `Cannot connect to API server. Make sure the API server is running at ${API_BASE_URL}.`
         console.error(errorMessage)
         showError('Connection Error', errorMessage)
         throw new Error(errorMessage)
@@ -355,7 +355,7 @@ export function useAutomation() {
             }
           } else if (error.request) {
             // No response received
-            errorMessage = 'No response from server. Check if the backend is running at http://0.0.0.0:8000.'
+            errorMessage = `No response from server. Check if the backend is running at ${API_BASE_URL}.`
             console.error('No response received:', error.request)
           } else {
             // Request setup error
