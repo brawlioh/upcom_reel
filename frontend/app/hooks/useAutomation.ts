@@ -17,7 +17,11 @@ interface AutomationJob {
   online_url?: string  // Added for Creatomate video URLs
   error_message?: string
   request?: AutomationRequest
+  game_title?: string  // Game title for display
+  steam_app_id?: string  // Steam App ID for reference
 }
+
+export type { AutomationJob }
 
 interface AutomationRequest {
   mode: 'single' | 'steam' | 'trending'

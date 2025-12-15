@@ -5,6 +5,7 @@ import { Video } from 'lucide-react'
 import { useAutomation } from './hooks/useAutomation'
 import AutomationControl from './components/AutomationControl'
 import ProgressTracker from './components/ProgressTracker'
+import JobHistory from './components/JobHistory'
 
 export default function Home() {
   const [isRunning, setIsRunning] = useState(false)
@@ -43,10 +44,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-1.5">
-        <div>
-          {/* Main Control Panel */}
-          <div className="space-y-2.5">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3">
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Left Column: Controls + Progress */}
+          <div className="lg:col-span-2 space-y-2.5">
             {/* Automation Control */}
             <AutomationControl 
               isRunning={isRunning}
@@ -60,6 +62,11 @@ export default function Home() {
               totalSteps={totalSteps}
               isRunning={isRunning}
             />
+          </div>
+
+          {/* Right Column: Job History */}
+          <div className="lg:col-span-1">
+            <JobHistory />
           </div>
         </div>
       </main>
