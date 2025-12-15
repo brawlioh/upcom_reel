@@ -22,7 +22,14 @@ except ModuleNotFoundError:
 class YouTubeReelsAutomation:
     def __init__(self):
         self.config = Config
-        self.steam_scraper = SteamScraper() if SteamScraper else None
+        # SteamScraper requires selenium - skip if not available
+        self.steam_scraper = None
+        if SteamScraper:
+            try:
+                self.steam_scraper = SteamScraper()
+            except (ModuleNotFoundError, Exception) as e:
+                logger.warning(f"SteamScraper not available (Selenium not installed): {e}")
+                self.steam_scraper = None
         self.intro_generator = IntroGenerator()
         self.vizard_processor = VizardProcessor()
         self.image_generator = PriceComparisonGenerator()
