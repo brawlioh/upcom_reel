@@ -214,15 +214,7 @@ export default function AutomationControl({ isRunning, setIsRunning, setCurrentS
         </div>
       )}
       
-      {/* Network Status Display - Only show when disconnected */}
-      {!error && !isConnected && (
-        <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
-          <p className="text-sm text-yellow-400">
-            API server disconnected. Attempting to reconnect...
-          </p>
-        </div>
-      )}
+      {/* Network status is now indicated by the config button only - removed banner per user request */}
 
       {/* Control Buttons */}
       <div className="flex space-x-3">
