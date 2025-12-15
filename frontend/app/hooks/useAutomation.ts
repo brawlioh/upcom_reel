@@ -485,6 +485,55 @@ export function useAutomation() {
     fetchAllJobs()
   }, [fetchAllJobs])
 
+  // HTTP polling fallback when WebSocket is disconnected
+  // This ensures progress updates even when WebSocket fails
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  
+  useEffect(() => {
+    // Start polling when there's an active job
+    const shouldPoll = currentJob && 
+      (currentJob.status === 'running' || currentJob.status === 'queued')
+    
+    if (shouldPoll) {
+      console.log('Starting HTTP polling for job progress (fallback for WebSocket)')
+      
+      // Poll every 3 seconds for progress updates
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const updatedJob = await fetchJobStatus(currentJob.job_id)
+          
+          // Update current job with latest status
+          setCurrentJob(updatedJob)
+          
+          // Update jobs list
+          setJobs(prev => prev.map(job => 
+            job.job_id === updatedJob.job_id ? updatedJob : job
+          ))
+          
+          console.log(`Polling update: Step ${updatedJob.current_step}, Status: ${updatedJob.status}, Progress: ${updatedJob.progress}%`)
+          
+          // Stop polling if job is completed or failed
+          if (updatedJob.status === 'completed' || updatedJob.status === 'failed') {
+            console.log(`Job ${updatedJob.status}, stopping polling`)
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
+          }
+        } catch (error) {
+          console.error('Polling error:', error)
+        }
+      }, 3000)
+    }
+    
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [currentJob?.job_id, currentJob?.status])
+
   return {
     currentJob,
     jobs,
