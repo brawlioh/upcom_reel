@@ -143,10 +143,24 @@ export function useAutomation() {
               return
               
             case 'progress_update':
-              setCurrentJob(data.data)
+              // Update current job with progress info
+              setCurrentJob(prev => prev ? {
+                ...prev,
+                current_step: data.step,
+                step_name: data.step_name,
+                progress: data.progress,
+                status: 'running'
+              } : null)
+              
               // Update jobs list
               setJobs(prev => prev.map(job => 
-                job.job_id === data.job_id ? data.data : job
+                job.job_id === data.job_id ? {
+                  ...job,
+                  current_step: data.step,
+                  step_name: data.step_name,
+                  progress: data.progress,
+                  status: 'running'
+                } : job
               ))
               return
               
