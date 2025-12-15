@@ -8,17 +8,21 @@ from loguru import logger
 from config import Config
 from typing import Dict, List, Optional
 import os
-from utils.steam_scraper import SteamScraper
 from modules.module1_intro import IntroGenerator
 from modules.module2_vizard import VizardProcessor
 from modules.module0_price import PriceComparisonGenerator
 from modules.module4_compilation import CreatorMateCompiler
 from datetime import datetime
 
+try:
+    from utils.steam_scraper import SteamScraper
+except ModuleNotFoundError:
+    SteamScraper = None
+
 class YouTubeReelsAutomation:
     def __init__(self):
         self.config = Config
-        self.steam_scraper = SteamScraper()
+        self.steam_scraper = SteamScraper() if SteamScraper else None
         self.intro_generator = IntroGenerator()
         self.vizard_processor = VizardProcessor()
         self.image_generator = PriceComparisonGenerator()

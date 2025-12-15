@@ -1,23 +1,44 @@
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 from loguru import logger
 import time
 import re
 from typing import List, Dict, Optional
 
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
+    _SELENIUM_AVAILABLE = True
+except ModuleNotFoundError:
+    webdriver = None
+    Options = None
+    By = None
+    WebDriverWait = None
+    EC = None
+    ChromeDriverManager = None
+    _SELENIUM_AVAILABLE = False
+
 class SteamScraper:
     def __init__(self):
+        if not _SELENIUM_AVAILABLE:
+            raise ModuleNotFoundError(
+                "SteamScraper requires 'selenium' and 'webdriver_manager'. "
+                "Install them to enable browser-based Steam scraping."
+            )
         self.setup_driver()
     
     def setup_driver(self):
         """Setup Chrome driver with appropriate options"""
         try:
+            if not _SELENIUM_AVAILABLE:
+                raise ModuleNotFoundError(
+                    "SteamScraper requires 'selenium' and 'webdriver_manager'. "
+                    "Install them to enable browser-based Steam scraping."
+                )
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
