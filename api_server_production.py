@@ -4,17 +4,23 @@ import uuid
 import re
 from datetime import datetime
 from typing import Dict, List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import asyncio
+import json
+import uuid
+from datetime import datetime
+from pathlib import Path
+import os
+
+from main import YouTubeReelsAutomation
+from utils.steam_api_scraper import get_steam_game_details
 from loguru import logger
 import uvicorn
-import os
 import aiohttp
 import ssl
-
-# Import your existing automation system
-from main import YouTubeReelsAutomation
 
 app = FastAPI(title="YouTube Reels Automation API - PRODUCTION", version="1.0.0")
 
@@ -309,11 +315,24 @@ async def run_automation_job(job_id: str, request: AutomationRequest):
             game_details = {}
             
             if request.steam_app_id:
-                # Use steam_scraper only if available (requires Selenium)
+                # Use steam_scraper if available (requires Selenium)
                 if automation.steam_scraper:
                     game_details = automation.steam_scraper.get_game_details(request.steam_app_id)
                     if game_details:
                         game_title = game_details.get('title', game_title)
+                else:
+                    # Fallback to Steam API scraper (HTTP-based, works on Railway)
+                    try:
+                        logger.info(f"Using Steam API scraper for App ID: {request.steam_app_id}")
+                        game_details = await get_steam_game_details(request.steam_app_id)
+                        if game_details and game_details.get('name'):
+                            game_title = game_details['name']
+                            logger.info(f"✅ Got game title from Steam API: {game_title}")
+                        else:
+                            logger.warning(f"Steam API scraper returned no name for {request.steam_app_id}")
+                    except Exception as e:
+                        logger.error(f"Steam API scraper failed: {e}")
+                        # Keep the fallback title
             
             # Add custom video URL if provided
             if request.custom_video_url:
