@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, Dict, Any
 import asyncio
 import json
