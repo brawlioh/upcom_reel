@@ -111,7 +111,7 @@ class CreatorMateCompiler:
                     "duration": None,  # Using null (None in Python) as in the reference
                     "source": cloudinary_urls.get("vizard"),
                     "loop": True,
-                    "volume": "20%",
+                    "volume": "15%",
                     "animations": [
                         {
                             "time": "end",
@@ -354,7 +354,7 @@ class CreatorMateCompiler:
                                                     "time": "auto",  # Will position after the intro-heygen video
                                                     "fit": "cover",
                                                     "duration": 3,
-                                                    "source": cloudinary_urls.get("outro"),
+                                                    "source": "https://res.cloudinary.com/dodod8s0v/image/upload/v1765352985/outro_2_itdbgn.png",
                                                     "animations": [
                                                         {
                                                             "time": 0,
